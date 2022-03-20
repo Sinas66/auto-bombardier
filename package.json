@@ -4,7 +4,10 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "start": "node index.js"
+    "start": "node index.js",
+    "pm2": "NODE_ENV=production pm2 start ecosystem.config.js",
+    "stop": "pm2 stop ddos",
+    "delete": "pm2 delete ddos"
   },
   "keywords": [],
   "author": "",
@@ -12,6 +15,7 @@
   "dependencies": {
     "dockerode": "^3.3.1",
     "dotenv": "^16.0.0",
-    "google-spreadsheet": "^3.2.0"
+    "google-spreadsheet": "^3.2.0",
+    "telegraf": "^4.7.0"
   }
 }
